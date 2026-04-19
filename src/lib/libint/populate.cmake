@@ -120,6 +120,7 @@ file(
 file(
   INSTALL
     "${PROJECT_SOURCE_DIR}/external/boost.tar.gz"
+    "${PROJECT_SOURCE_DIR}/external/eigen3.tar.gz"
   DESTINATION "${EXPORT_STAGE_DIR}/external"
   )
 

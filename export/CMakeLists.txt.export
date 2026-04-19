@@ -58,6 +58,8 @@ option_with_print(LIBINT2_LOCAL_Eigen3_INSTALL
   "Install an exported target with hard-coded Eigen3 dependency paths. This is potentially useful and important when consuming the compiled C++11 interface library so that the Libint library build and Libint consumer build use the same Eigen3 installation & ABI. This is at most a convenience when consuming the header-only C++11 interface library. In consumer build, set `LIBINT2_LOCAL_Eigen3_FIND=ON` before `find_package(Libint2) to load the exported Eigen3." OFF)
 option_with_print(CMAKE_DISABLE_FIND_PACKAGE_Boost
   "When Boost required for C++11 API, disable its detection, thereby forcing use of bundled Boost (Standard CMake variable: https://cmake.org/cmake/help/latest/variable/CMAKE_DISABLE_FIND_PACKAGE_PackageName.html)" OFF)
+option_with_print(CMAKE_DISABLE_FIND_PACKAGE_Eigen3
+  "Disable Eigen3 detection, thereby forcing use of bundled Eigen3" OFF)
 
 check_function_exists(posix_memalign HAVE_POSIX_MEMALIGN)
 if (HAVE_POSIX_MEMALIGN)
@@ -167,7 +169,9 @@ if (LIBINT2_REQUIRE_CXX_API)
     endif()
 endif()
 
-find_package(Eigen3 MODULE)
+if (NOT TARGET Eigen3::Eigen AND NOT CMAKE_DISABLE_FIND_PACKAGE_Eigen3)
+    find_package(Eigen3 MODULE)
+endif()
 
 set(LIBINT2_CXX_STANDARD 11)
 if (TARGET Eigen3::Eigen)
@@ -176,6 +180,27 @@ if (TARGET Eigen3::Eigen)
     if (EIGEN3_VERSION VERSION_GREATER_EQUAL "3.5.0")
         set(LIBINT2_CXX_STANDARD 14)
         message(STATUS "Eigen ${EIGEN3_VERSION} requires C++14; setting LIBINT2_CXX_STANDARD=14")
+    endif()
+else()
+    if (LIBINT2_REQUIRE_CXX_API)
+        message(STATUS "Unpacking bundled Eigen3...")
+        file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/include/libint2)
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E tar xzf ${PROJECT_SOURCE_DIR}/external/eigen3.tar.gz
+            WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/include/libint2
+            RESULT_VARIABLE UNPACK_EIGEN_RESULT
+            OUTPUT_VARIABLE UNPACK_EIGEN_OUTPUT
+            ERROR_VARIABLE UNPACK_EIGEN_OUTPUT
+            )
+        if (NOT UNPACK_EIGEN_RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to unpack the bundled Eigen3!\nThe tar command output:\n${UNPACK_EIGEN_OUTPUT}")
+        endif()
+        add_library(Eigen3::Eigen INTERFACE IMPORTED)
+        set_target_properties(Eigen3::Eigen PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${PROJECT_BINARY_DIR}/include/libint2/eigen3"
+        )
+        set(LIBINT_HAS_EIGEN 1)
+        set(LIBINT_HAS_BUNDLED_EIGEN 1)
     endif()
 endif()
 if (LIBINT2_REQUIRE_CXX_API AND NOT LIBINT_HAS_EIGEN)
@@ -799,6 +824,14 @@ install(CODE "
 if (LIBINT2_REQUIRE_CXX_API AND NOT LIBINT_HAS_SYSTEM_BOOST_PREPROCESSOR_VARIADICS)
     install(
       DIRECTORY ${PROJECT_BINARY_DIR}/include/libint2/boost
+      DESTINATION "${LIBINT2_INSTALL_INCLUDEDIR}/libint2"
+      )
+endif()
+
+# install bundled Eigen3 headers if needed
+if (LIBINT_HAS_BUNDLED_EIGEN)
+    install(
+      DIRECTORY ${PROJECT_BINARY_DIR}/include/libint2/eigen3
       DESTINATION "${LIBINT2_INSTALL_INCLUDEDIR}/libint2"
       )
 endif()
